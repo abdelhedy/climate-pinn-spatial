@@ -144,13 +144,13 @@ climate-pinn-spatial/
 
 ## What Makes This Different from a Standard LSTM/DNN
 
-| Capability | LSTM | ODE PINN | **This project (PDE PINN)** |
-|---|:---:|:---:|:---:|
-| Predict at arbitrary latitude | ✗ | ✗ | **✓** |
-| Identify λ (climate feedback) | ✗ | ✓ | **✓** |
-| Respect physical boundary conditions | ✗ | ✗ | **✓** |
-| Spatiotemporal PDE constraint | ✗ | ✗ | **✓** |
-| Needs large labeled datasets | ✓ | ✗ | **✗** |
+| Capability | LSTM/DNN | **This project (PDE PINN)** |
+|---|:---:|:---:|
+| Predict at arbitrary latitude | ✗ | **✓** |
+| Identify λ (climate feedback) | ✗ | **✓** |
+| Respect physical boundary conditions | ✗ | **✓** |
+| Spatiotemporal PDE constraint | ✗ | **✓** |
+| Needs large labeled datasets | ✓ | **✗** |
 
 ---
 
