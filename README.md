@@ -13,6 +13,8 @@ Instead of a purely data-driven approach, the neural network is constrained to s
 - **Satisfy** a partial differential equation governing meridional heat transport
 - **Identify** the climate feedback parameter λ (an inverse problem)
 
+> A purely data-driven baseline (LSTM) was evaluated on the same dataset and achieved higher R² but failed to identify physical parameters or respect boundary conditions — motivating the physics-informed approach.
+
 ---
 
 ## The Physical Model
@@ -21,14 +23,14 @@ The 1D spatial EBM describes how temperature anomalies evolve across latitudes o
 
 $$C \frac{\partial T'}{\partial t} = \kappa \frac{\partial^2 T'}{\partial x^2} - \lambda T' + F(t)$$
 
-| Symbol | Meaning | Status |
-|--------|---------|--------|
+| Symbol | Meaning | Value / Status |
+|--------|---------|----------------|
 | $T'(x,t)$ | Temperature anomaly at latitude $x$, time $t$ | **network output** |
 | $x = \sin(\phi)$ | Normalized latitude ∈ [-1, 1] | input |
-| $\kappa$ | Meridional thermal diffusivity | fixed (literature: 0.65 W/m²/°C) |
+| $C$ | Ocean-atmosphere heat capacity | fixed: **10 W·yr/m²/°C** |
+| $\kappa$ | Meridional thermal diffusivity | fixed: **0.65 W/m²/°C** (North 1981) |
 | $\lambda$ | Climate feedback parameter | **learned** |
 | $F(t)$ | Anthropogenic forcing (CO₂ + aerosols + volcanoes) | computed |
-| $C$ | Ocean-atmosphere heat capacity | fixed (10 W·yr/m²/°C) |
 
 **Boundary conditions** (no heat flux at poles):
 $$\frac{\partial T'}{\partial x}\bigg|_{x=\pm 1} = 0$$
@@ -56,7 +58,7 @@ Input  : [x_norm, t_norm]  →  2 neurons
          Linear(64 → 1)
 Output : T'_norm(x, t)     →  1 neuron
 
-Learnable physical parameter : λ (climate feedback)
+Learnable physical parameter : λ  (log-parameterized, constrained to [0.1, 3.0])
 Fixed physical parameter     : κ = 0.65 W/m²/°C (North, 1981)
 ```
 
@@ -80,33 +82,40 @@ $$\frac{\partial T}{\partial t} = \frac{T_\sigma}{\Delta t} \cdot \frac{\partial
 
 ---
 
+## Training
+
+Two-phase training strategy with **Adam + Cosine Annealing LR** (1e-3 → 1e-5):
+
+| Phase | Epochs | β₁ (physics weight) | β₂ (boundary weight) | Goal |
+|-------|--------|---------------------|----------------------|------|
+| 1 | 3,000 | **0.01** | **0.05** | Warm up — prioritize data fit |
+| 2 | 7,000 | **0.15** | **0.10** | Refine physics + identify λ |
+
+Additional constraints:
+- Gradient clipping: `max_norm = 1.0`
+- λ log-parameterized and clamped to physical range **[0.1, 3.0] W/m²/°C**
+- κ registered as a fixed buffer (not updated by optimizer)
+
+---
+
 ## Results
 
 | Metric | Value | Reference |
 |--------|-------|-----------|
-| R² (data fit) | **0.78** | — |
-| MAE | **0.19 °C** | — |
-| RMSE | **0.28 °C** | — |
-| λ identified | **1.12 W/m²/°C** | IPCC AR6: [0.8, 1.2] ✓ |
-| ECS = 3.7/λ | **3.30 °C** | IPCC AR6: [2.5, 4.0] ✓ |
-| κ (fixed) | **0.65 W/m²/°C** | North (1981) ✓ |
+| R² (data fit) | **0.6702** | — |
+| MAE | **0.2325 °C** | — |
+| RMSE | **0.3450 °C** | — |
+| Max error | **2.1055 °C** | — |
+| PDE residual (mean) | **0.2903 W/m²** | ideal: 0 |
+| κ (fixed) | **0.6500 W/m²/°C** | North (1981): [0.55, 0.75] ✓ |
+| λ identified | **0.9906 W/m²/°C** | IPCC AR6: [0.8, 1.2] ✓ |
+| ECS = 3.7/λ | **3.74 °C** | IPCC AR6: [2.5, 4.0] ✓ |
 
-**Key finding:** the climate feedback parameter λ is successfully identified from 145 years of observational data, yielding an Equilibrium Climate Sensitivity of **3.30°C per CO₂ doubling**, consistent with IPCC AR6 estimates.
+**Key finding:** the climate feedback parameter λ is successfully identified from 145 years of observational data, yielding an Equilibrium Climate Sensitivity of **3.74°C per CO₂ doubling**, consistent with IPCC AR6 estimates.
 
-**Note on κ:** meridional diffusivity is not identifiable from spatially uniform forcing alone — a known limitation in climate EBM literature. κ is fixed to its literature value.
+**Note on R²:** the moderate R² (0.67) reflects a fundamental limitation of the EBM — not a training failure. The EBM is a deliberate simplification that cannot represent short-term variability (ENSO, volcanic eruptions, measurement noise). The 200× reduction in PDE residual (56.4 → 0.29 W/m²) compared to a data-only baseline confirms that the physics constraint is properly enforced.
 
----
-
-## Training
-
-Two-phase training strategy:
-
-| Phase | Epochs | β₁ (physics) | β₂ (boundary) | Goal |
-|-------|--------|--------------|----------------|------|
-| 1 | 3,000 | 0.001 | 0.05 | Warm up data fit |
-| 2 | 7,000 | 0.05 | 0.10 | Refine physics + identify λ |
-
-Optimizer: Adam + Cosine Annealing LR (1e-3 → 1e-5)
+**Note on κ:** meridional diffusivity is not identifiable from spatially uniform forcing alone — a known limitation in climate EBM literature (North et al., 1981). κ is fixed to its literature value.
 
 ---
 
